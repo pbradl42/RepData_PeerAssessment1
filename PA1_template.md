@@ -1,5 +1,9 @@
 # Reproducible Research: Peer Assessment 1
 
+The following is an analysis of a set of data containing the number of steps taken by an anonymous individual during 5-minute intervals during the months of October and November, 2012. 
+
+The analysis requires two libraries, commonly used in R:
+
 ```r
 library(dplyr)
 ```
@@ -21,15 +25,25 @@ library(dplyr)
 library(ggplot2)
 ```
 
+
 ## Loading and preprocessing the data
 
-Load the data (i.e. read.csv())
+The dataset itself is contained in a comma-separated file included in the assignment packet.  It is read into a data.frame named 'activityset,' which serves as the base set of data throughout this analysis.
 
 ```r
 activityset <- read.csv("activity.csv", stringsAsFactors = FALSE, header = TRUE)
 ```
+The activityset data contains 17568 rows in 3 columns:
 
-Change 'date' column to posix date format
+```r
+colnames(activityset)
+```
+
+```
+## [1] "steps"    "date"     "interval"
+```
+
+The 'Date' column is, when imported, of class character, so must be changed to a POSIX data for further analysis:
 
 
 ```r
@@ -38,9 +52,8 @@ activityset[,2] <- as.Date(activityset[,2], format="%Y-%m-%d")
 
 ## What is mean total number of steps taken per day?
 
-For this part of the assignment, you can ignore the missing values in the dataset.
+The total number of steps taken per day can be calculated aggregating rows on the POSIX-date 'date' column, and calling 'sum' on the result. The column 'x' in the following represents the total number of steps per day:
 
-Calculate the total number of steps taken per day
 
 ```r
 aggregate(activityset$steps, by=list(mydate=activityset$date), FUN=sum)
@@ -111,45 +124,33 @@ aggregate(activityset$steps, by=list(mydate=activityset$date), FUN=sum)
 ## 61 2012-11-30    NA
 ```
 
-If you do not understand the difference between a histogram and a barplot, research the difference between them. Make a histogram of the total number of steps taken each day
+These results show that this user takes between 10,000 and 15,000 steps on majority of days during this two-month period, as shown in the following histogram:
 
 ```r
 aggregate(activityset$steps, by=list(mydate=activityset$date), FUN=sum) -> forhist
-hist(forhist$x)
+hist(forhist$x, xlab="Steps", main="Total steps by date")
 ```
 
-![](PA1_template_files/figure-html/unnamed-chunk-5-1.png) 
+![](PA1_template_files/figure-html/unnamed-chunk-6-1.png) 
 
-Calculate and report the mean and median of the total number of steps taken per day
-
-```r
-mean(forhist$x, na.rm = TRUE)
-```
-
-```
-## [1] 10766.19
-```
-
-```r
-median(forhist$x, na.rm = TRUE)
-```
-
-```
-## [1] 10765
-```
+Not suprisingly, the mean number of steps per day is 1.0766189\times 10^{4} with a median of 10765.
 
 ## What is the average daily activity pattern?
 
-Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+The dataset contains steps per 5-minute interval throughout the day, which is represented in an integer ranging from 0 to 2355.  These correspond to hours and minutes from midnight to 11:59PM each day. We therefore can chart the average activity of this individual throughout the day.
+
+This analysis is completed by aggregating the 'activityset' dataset, like previously, but this time on the time interval variable 'interval' and averaging the steps:
 
 ```r
 aggregate(activityset$steps, by=list(interval=activityset$interval), FUN=mean, na.rm = TRUE) -> fortimeseries
 ggplot(fortimeseries, aes(x=interval, y=x)) + geom_line() -> p
+p <- p + ylab("Steps") + xlab("Time interval (HHMM)") + ggtitle("Average steps by 5-min interval")
 print(p)
 ```
 
 ![](PA1_template_files/figure-html/unnamed-chunk-7-1.png) 
-Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+The 5-minute interval which, on average, sees the most number of steps is:
 
 ```r
 which.max(fortimeseries$x) -> rownum
@@ -159,44 +160,50 @@ fortimeseries[rownum, 1]
 ```
 ## [1] 835
 ```
+or 8:35AM, suggesting that this user has a long walk between his or her parking spot and his or her office!
+
 ## Inputing missing values
 
-Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+There are 2304 missing values in the 'steps' column of the dataset.  
 
-Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+We can fill in those missing values by substituting taking the average number of steps for the same interval in the other days of the dataset, and replacing the 'na' values.
 
-```r
-nasteps <- sum(is.na(activityset))
-```
-
-Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+We accomplish this in two steps. First, we subset 'activityset' into two: 
 
 ```r
 activityset[is.na(activityset), ] -> naset
+activityset[complete.cases(activityset), ] -> nonaset
+```
+1. 'naset', which contains all the rows with 'NA' in the 'steps' column
+2. 'nonaset', which contains all the rows without 'NA' in the 'steps' column
+
+These two sets should contain the total set of rows in the original activity set, and checking on 'nrow' shows that they do: Number of rows in 'naset' 2304 + 15264 = 17568.
+
+As we have already calculated the average number of steps without NAs in the creating the previous chart, we can reuse the aggregated dataset created to fill in the missing values in 'naset'.
+
+```r
 merge(naset, fortimeseries, by="interval") -> withavg
 withavg[, c(1,3,4)]  -> withavg
 colnames(withavg) <- c("interval", "date", "steps")
-# Now, subset the original to contain only complete cases (i.e. those not in 'naset')
-activityset[complete.cases(activityset), ] -> nonaset
-# and merge back together
 ```
 
-Create a new dataset that is equal to the original dataset but with the missing data filled in.
+These two sets can then be merged back together:
 
 ```r
 rbind(nonaset, withavg) -> completeSet
 ```
+The resultant set has 17568 rows and 3 cols, that are named steps, date, interval, just like 'activityset'.  And there are 0 NAs in the dataset.
 
-Make a histogram of the total number of steps taken each day  
+In order to see if this strategy of substituting for missing data was successful, we will conduct the same analyses as above.  The histogram of the completeSet dataset looks remarkably similar to that of the activity set:
 
 ```r
 aggregate(completeSet$steps, by=list(mydate=completeSet$date), FUN=sum) -> forhist2
-hist(forhist2$x)
+hist(forhist2$x, xlab="Steps", main="Total steps by date")
 ```
 
 ![](PA1_template_files/figure-html/unnamed-chunk-12-1.png) 
 
-and Calculate and report the mean and median total number of steps taken per day.
+Not suprisingly, the mean number of steps per day is 1.0766189\times 10^{4} with a median of 10765.
 
 ```r
 mean(forhist2$x, na.rm = TRUE)
@@ -213,36 +220,53 @@ median(forhist2$x, na.rm = TRUE)
 ```
 ## [1] 10766.19
 ```
-Do these values differ from the estimates from the first part of the assignment?
 
->The mean before the values were replace was 1.07662\times 10^{4}. This compares with 1.07662\times 10^{4} after substitution.  A similar pattern was found with the median, with 1.0765\times 10^{4} before substitution and 1.07662\times 10^{4} after.
+The mean before the values were replace was 1.07662\times 10^{4}. This compares with 1.07662\times 10^{4} after substitution.  A similar pattern was found with the median, with 1.0765\times 10^{4} before substitution and 1.07662\times 10^{4} after. 
 
-What is the impact of imputing missing data on the estimates of the total daily number of steps?
+Therefore, there was neglible impact on the dataset as a whole by replacing the missing values.
 
-> The impact of substituting the average for that time slot from the other days recorded was minimal on the overall dataset.
 
 ## Are there differences in activity patterns between weekdays and weekends?
 
-For this part the weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.
-
-Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
-
-Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
+As suggested above, the dataset may show a pattern of behavior related to the user's work schedule (i.e. the maximum number of steps on average occur at 8:35AM). To investigate this futher, we recode the 'date' variable into a factor by 'weekday' or 'weekend'.
 
 ```r
 weekdays(activityset$date) -> activityset$wd
 factor(activityset$wd) -> activityset$wd
 levels(activityset$wd) <- c("weekday", "weekday", "weekend", "weekend", "weekday", "weekday", "weekday")
+```
+
+As above, we need to aggregate by interval for each of these factors. While there is almost certainly a more elegant way of accomplishing this, the simpliest startegy is to subset the activity set into two:
+
+```r
 activityset[activityset$wd == "weekday", ] -> myweekdays
 activityset[activityset$wd == "weekend", ] -> myweekends
+```
+
+Aggregate by interval with 'mean' as the function for each of the resultant datasets: 
+
+```r
 aggregate(myweekdays$steps, by=list(interval=myweekdays$interval), FUN=mean, na.rm = TRUE) -> fortimeseries1
 aggregate(myweekends$steps, by=list(interval=myweekends$interval), FUN=mean, na.rm = TRUE) -> fortimeseries2
+```
+
+The first resultant dataset contains 288 rows and 2 cols, with column names: interval, x. The second contains 288 rows and 2 cols, with column names: interval, x.  The subsetting was successful. The two can be put together with rbind to represent the original whole before subsetting.
+
+However, before we do that, we need to maintain the information about which subset represents which factor. Thus, we add a variable to each, to hold which factor the values represent. 
+
+```r
 fortimeseries1$wd <- "weekday"
 fortimeseries2$wd <- "weekend"
 rbind(fortimeseries1, fortimeseries2) -> fortimeseries3
+```
+
+The final resultant dataset, ready for plotting, contains 576 rows and 3 cols, with column names: interval, x, wd.
+
+```r
 ggplot(fortimeseries3, aes(x=interval, y=x, colour=wd, group=wd)) + geom_line() -> p
-p <-  p + facet_grid(wd ~ .)
+p <-  p + facet_grid(wd ~ .) + ylab("Steps") + xlab("Time interval (HHMM)")
+p <- p + ggtitle("Average steps by 5-min interval, weekdays and weekend")
  print(p)
 ```
 
-![](PA1_template_files/figure-html/unnamed-chunk-14-1.png) 
+![](PA1_template_files/figure-html/unnamed-chunk-18-1.png) 
